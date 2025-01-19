@@ -1,0 +1,66 @@
+{
+  "manifest_version": 3,
+  "name": "Google Classroom 作业分类与批改",
+  "version": "1.7",
+  "description": "使用 Google Classroom API 进行作业分类与批改。",
+  "permissions": [
+    "identity",
+    "scripting",
+    "activeTab",
+    "storage",
+    "tabs",
+    "identity.email"
+    
+  ],
+  "host_permissions": [
+    "https://classroom.google.com/*",
+    "https://www.googleapis.com/*",
+    "https://classroom.googleapis.com/*",
+    "https://script.google.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://classroom.google.com/c/*"],
+      "js": ["content.js"],
+      "css": ["styles/content.css"]
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "oauth2": {
+    "client_id": "107432221224-v37s7g8q0f2ll12gaujcd84a2tdtce70.apps.googleusercontent.com",
+    "scopes": [
+    "https://www.googleapis.com/auth/classroom.coursework.me",
+    "https://www.googleapis.com/auth/classroom.student-submissions.me.readonly",
+    "https://www.googleapis.com/auth/classroom.coursework.students",
+    "https://www.googleapis.com/auth/classroom.student-submissions.students.readonly",
+    "https://www.googleapis.com/auth/classroom.courses.readonly",
+    "https://www.googleapis.com/auth/classroom.rosters.readonly",
+    "https://www.googleapis.com/auth/drive.readonly",
+    "https://www.googleapis.com/auth/drive"
+    
+    ]
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["data_manager.js"],
+      "matches": ["https://classroom.google.com/*"]
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' ; object-src 'self'"
+}
+
+}
+
+
+
+
+
+  
+  

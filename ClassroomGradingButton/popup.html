@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>批改作业</title>
+  <link rel="stylesheet" href="styles/popup.css">
+</head>
+<body>
+  <!-- 这个容器专门放三个分类按钮 -->
+  <div id="buttons-container">
+    <button id="all-button">全部</button>
+    <button id="attendance-button">签到</button>
+    <button id="assignments-button">作业</button>
+  </div>
+
+  <!-- 用于显示报错或提示信息（如果有） -->
+  <div id="navigation-feedback" class="error"></div>
+
+  <!-- 加载动画 -->
+  <div id="loading-spinner" style="display: none; text-align: center;">
+    <img src="styles/加载动效_爱给网_aigei_com.gif" alt="加载中..." class="loading-spinner-image">
+  </div>
+
+  <!-- 显示“全部 / 签到 / 作业 / 查看提交详情”等内容的主要容器 -->
+  <div id="assignments-container"></div>
+
+  <!-- 按钮组 -->
+  <div id="grading-controls" style="text-align: center; margin-top: 20px;">
+    <button id="return-button" style="background-color: #28A745;">返回</button>
+    <button id="start-grading-button" style="background-color: #FF0000;">开始批改</button>
+    <button id="submit-grades-button" style="background-color: #FF4500; color: white;">发送分数</button>
+  </div>
+
+  <!-- 评分配置选项 -->
+  <div id="grading-options" style="display: none; border: 1px solid #ddd; padding: 15px; margin-top: 20px;">
+    <h3 id="grading-title">评分配置</h3>
+    <label><input type="checkbox" id="require-photo"> 需要照片</label><br>
+    <label><input type="checkbox" id="require-video"> 需要视频</label><br>
+    <label><input type="checkbox" id="require-code"> 需要代码</label><br>
+    <!-- 分别对应正式/模拟的“自动评分”按钮 -->
+  <button id="auto-grade-button">开始评分</button>
+ 
+</div>
+  <script src="data_manager.js"></script>
+  <script src="popup.js" type="module"></script>
+</body>
+</html>
+
+

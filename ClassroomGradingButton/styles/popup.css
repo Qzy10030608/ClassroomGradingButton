@@ -1,0 +1,140 @@
+/* 通用样式 */
+body {
+    font-family: Arial, sans-serif;
+    margin: 20px;
+}
+
+/* 错误信息样式 */
+.error {
+    color: red;
+    font-weight: bold;
+    margin-top: 20px;
+    text-align: center;
+}
+
+/* 表格样式 */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    font-size: 14px;
+    text-align: left;
+}
+
+th, td {
+    border: 1px solid #ddd;
+    padding: 8px;
+}
+
+th {
+    background-color: #f4f4f4;
+    font-weight: bold;
+}
+
+tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+tr:hover {
+    background-color: #f1f1f1;
+}
+
+/* 按钮样式 */
+button {
+    background-color: #007BFF;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    margin: 10px 5px;
+    cursor: pointer;
+    border-radius: 5px;
+    font-size: 14px;
+}
+
+button:hover {
+    background-color: #0056b3;
+}
+
+/* 返回按钮样式 */
+#return-button {
+    background-color: #28A745;
+}
+
+#return-button:hover {
+    background-color: #218838;
+}
+
+/* 动态加载动画 */
+.loading-spinner-container {
+    text-align: center;
+    padding: 20px;
+}
+
+.loading-spinner {
+    border: 6px solid #f3f3f3; /* Light grey */
+    border-top: 6px solid #007BFF; /* Blue */
+    border-radius: 50%;
+    width: 50px; /* 初始宽度 */
+    height: 30px; /* 初始高度 */
+    animation: spin 1s linear infinite, scaleUpDown 1.5s infinite; /* 增加 scaleUpDown 动画 */
+    margin: 20px auto;
+    display: block;
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes scaleUpDown {
+    0%, 100% {
+        transform: scale(1); /* 原始大小 */
+    }
+    50% {
+        transform: scale(1.5); /* 放大到 3 倍 */
+    }
+}
+
+/* 按钮组的布局 */
+#grading-controls {
+    display: flex;
+    justify-content: center;
+    gap: 15px; /* 按钮之间的间距 */
+}
+
+/* 返回按钮 */
+#return-button {
+    background-color: #28A745; /* 绿色 */
+    color: white;
+}
+
+#return-button:hover {
+    background-color: #218838;
+}
+
+/* 开始批改按钮 */
+#start-grading-button {
+    background-color: #FF0000; /* 红色 */
+    color: white;
+}
+
+#start-grading-button:hover {
+    background-color: #CC0000; /* 深红色 */
+}
+
+#submit-grades-button {
+    background-color: #FF4500; /* 橘红色 */
+    color: white;
+    padding: 8px 16px;
+    border: none;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+#simulate-grading-button:hover {
+    background-color: #CC8400; /* 深橙色 */
+}
