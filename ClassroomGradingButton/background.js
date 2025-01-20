@@ -127,9 +127,9 @@ async function handleGetCourseWork(message, sendResponse) {
       const gradingScale = assignments.some(assignment => assignment.maxPoints === 5) ? "5" : "100";
 
       sendResponse({
-          success: true,
-          data: categorized,
-          gradingScale,
+        success: true,
+        data: categorized,
+        gradingScale: Number(gradingScale), // 确保为数值型
       });
   } catch (error) {
       console.error("[handleGetCourseWork] 异常:", error);
@@ -280,7 +280,7 @@ async function fetchStudentSubmissions(decodedCourseId, assignmentId) {
   try {
     const token = await getAuthToken();
 
-    // 获取课程详情以读取课程标题
+    // 获取课程详情
     const courseUrl = `https://classroom.googleapis.com/v1/courses/${decodedCourseId}`;
     const courseResponse = await fetch(courseUrl, { headers: { Authorization: `Bearer ${token}` } });
     if (!courseResponse.ok) {
@@ -291,33 +291,46 @@ async function fetchStudentSubmissions(decodedCourseId, assignmentId) {
 
     // 获取作业详情
     const assignmentData = await getAssignmentData(decodedCourseId, assignmentId, token);
-    const gradingScale = assignmentData.gradingScale || "100";
+    const gradingScale = Number(assignmentData.gradingScale) || 100; // 确保为数值
+    console.log("[fetchStudentSubmissions] 当前分数制 gradingScale:", gradingScale);
 
     // 获取学生提交数据
     const submissions = await getAssignmentSubmissions(decodedCourseId, assignmentId, token);
     const students = await getCourseStudents(decodedCourseId, token);
 
     // 构建学生 ID 到名字的映射表
-    const studentMap = students.reduce((map, student) => {
-      map[student.userId] = student.profile?.name?.fullName || "未知姓名";
-      return map;
-    }, {});
+    const studentMap = Array.isArray(students)
+      ? students.reduce((map, student) => {
+          const userId = student.userId || "未知学号";
+          const fullName = student.profile?.name?.fullName || "未知姓名";
+          map[userId] = fullName;
+          return map;
+        }, {})
+      : {};
 
     // 格式化提交数据
-    const formattedSubmissions = submissions.map((submission) => ({
-      studentId: submission.userId || "未知学号",
-      studentName: studentMap[submission.userId] || "未知姓名",
-      files: (submission.assignmentSubmission?.attachments || []).map((attachment) => ({
+    const formattedSubmissions = submissions.map((submission) => {
+      const studentId = submission.userId || "未知学号";
+      const studentName = studentMap[submission.userId] || "未知姓名";
+      const assignmentSubmission = submission.assignmentSubmission || {};
+      const attachments = Array.isArray(assignmentSubmission.attachments) ? assignmentSubmission.attachments : [];
+      const files = attachments.map((attachment) => ({
         fileName: attachment.driveFile?.title || "未知文件",
         fileLink: attachment.driveFile?.alternateLink || "#",
-      })).filter(file => file.fileName && file.fileLink), // 过滤无效文件
-    }));
+      })).filter(file => file.fileName && file.fileLink);
+
+      return {
+        studentId,
+        studentName,
+        files,
+      };
+    });
 
     console.log("[fetchStudentSubmissions] 格式化后的提交数据:", formattedSubmissions);
 
     return {
-      title, // 添加课程标题
-      gradingScale, // 分数制
+      title,
+      gradingScale,
       submissions: formattedSubmissions,
     };
   } catch (error) {
@@ -332,18 +345,19 @@ async function getAssignmentData(decodedCourseId, assignmentId, token) {
   const response = await fetch(apiUrl, { headers: { Authorization: `Bearer ${token}` } });
 
   if (!response.ok) {
-      throw new Error(`获取作业数据失败, 状态码=${response.status}, URL=${apiUrl}`);
+      throw new Error(`获取作业数据失败, 状态码=${response.status}`);
   }
 
   const data = await response.json();
-  console.log(`[getAssignmentData] 作业详情:`, data);
+  const maxPoints = data.maxPoints || 100;
+  const gradingScale = Number(maxPoints) === 5 ? 5 : 100;
+
+  console.log(`[getAssignmentData] 映射分数制: maxPoints=${maxPoints}, gradingScale=${gradingScale}`);
   return {
-      gradingScale: data.gradingScale || "100", // 默认设置为 100 分制
       ...data,
+      gradingScale,
   };
 }
-
-
 // 获取学生提交记录
 async function getAssignmentSubmissions(decodedCourseId, assignmentId, token) {
   const apiUrl = `https://classroom.googleapis.com/v1/courses/${decodedCourseId}/courseWork/${assignmentId}/studentSubmissions`;
@@ -375,61 +389,50 @@ async function getCourseStudents(decodedCourseId, token) {
  *************************************************************************/
 async function handleStartGrading(message, sendResponse) {
   try {
-      const { assignmentId, config } = message;
+    const { assignmentId, config } = message;
 
-      if (!assignmentId) {
-          throw new Error("未提供作业 ID，无法评分！");
+    if (!decodedCourseId) throw new Error("课程 ID 缺失！");
+    if (!assignmentId) throw new Error("作业 ID 缺失！");
+    if (!config) throw new Error("评分配置缺失！");
+
+    // 从 fetchStudentSubmissions 获取数据和分数制
+    const { gradingScale, submissions } = await fetchStudentSubmissions(decodedCourseId, assignmentId);
+
+    console.log("[handleStartGrading] 使用的分数制:", gradingScale);
+    console.log("[handleStartGrading] 获取到的学生提交数据:", submissions);
+
+    if (!Array.isArray(submissions)) {
+      throw new Error("[handleStartGrading] submissions 不是数组，无法评分！");
+    }
+
+    // 调用评分逻辑
+    const gradedSubmissions = submissions.map((submission) => {
+      if (!submission.files || !Array.isArray(submission.files) || submission.files.length === 0) {
+          console.warn(`[startGrading] 学生 ${submission.studentId} 没有提交任何文件，评分为 0 分`);
+          return { ...submission, score: 0 };
       }
-
-      if (!config) {
-          throw new Error("评分配置缺失，无法执行评分！");
-      }
-
-      // 获取分数制和学生提交数据
-      const { gradingScale, submissions } = await fetchStudentSubmissions(decodedCourseId, assignmentId);
-
-      console.log("[handleStartGrading] 获取到的学生提交数据:", submissions);
-
-      // 评分逻辑
-      const gradedSubmissions = submissions.map((submission) => {
-          if (!submission.files || submission.files.length === 0) {
-              console.warn(`学生 ${submission.studentId} 没有提交任何有效文件，评分为 0 分`);
-              return { ...submission, score: 0 };
-          }
-
+  
+      try {
           const score = calculateScore(submission, gradingScale, config);
           return { ...submission, score };
-      });
+      } catch (error) {
+          console.error(`[startGrading] 学生 ${submission.studentId} 的评分失败:`, error.message);
+          return { ...submission, score: 0 }; // 如果评分失败，默认返回 0 分
+      }
+  });
+  
 
-      console.log("[handleStartGrading] 评分结果:", gradedSubmissions);
+    console.log("[handleStartGrading] 评分结果:", gradedSubmissions);
 
-      // 返回评分结果到 popup.js
-      sendResponse({
-          success: true,
-          submissions: gradedSubmissions,
-          gradingScale,
-          config,
-      });
-
-      // 通知前端更新 UI
-      chrome.runtime.sendMessage(
-          {
-              action: "updateScores",
-              submissions: gradedSubmissions,
-              gradingScale,
-              config,
-          },
-          (response) => {
-              if (chrome.runtime.lastError) {
-                  console.error("[handleStartGrading] 发送评分结果时出错:", chrome.runtime.lastError.message);
-              } else {
-                  console.log("[handleStartGrading] 评分结果已成功发送:", response);
-              }
-          }
-      );
+    // 将数据传递给前端，确保 gradingScale 是数值
+    sendResponse({
+      success: true,
+      submissions: gradedSubmissions,
+      gradingScale: Number(gradingScale),
+    });    
   } catch (error) {
-      console.error("[handleStartGrading] 出错:", error.message);
-      sendResponse({ success: false, error: error.message });
+    console.error("[handleStartGrading] 出错:", error.message);
+    sendResponse({ success: false, error: error.message });
   }
 
   return true; // 保持消息通道打开

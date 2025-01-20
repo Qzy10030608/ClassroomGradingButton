@@ -60,25 +60,22 @@ async function loadCategoryData(decodedCourseId) {
         if (!cachedCategorizedData) {
             const response = await new Promise((resolve) => {
                 chrome.runtime.sendMessage(
-                    { action: "getCourseWork", decodedCourseId: decodedCourseId },
+                    { action: "getCourseWork", decodedCourseId },
                     resolve
                 );
             });
 
             if (response.success && response.data) {
                 const data = response.data;
+
                 if (Array.isArray(data.attendance) && Array.isArray(data.assignments)) {
-                    cachedCategorizedData = {
-                        ...data,
-                        submissions: [],
-                    };
+                    cachedCategorizedData = { ...data, submissions: [] };
                     console.log("分类数据加载成功:", cachedCategorizedData);
 
                     // 缓存分数制
-                    if (data.gradingScale) {
-                        localStorage.setItem("currentGradingScale", data.gradingScale);
-                        console.log("当前分数制:", data.gradingScale);
-                    }
+                    const gradingScale = Number(data.gradingScale) || 100;
+                    localStorage.setItem("currentGradingScale", gradingScale);
+                    console.log("当前分数制:", gradingScale);
                 } else {
                     console.error("分类数据格式错误:", data);
                     renderError("分类数据格式错误，请稍后重试。");
@@ -88,14 +85,12 @@ async function loadCategoryData(decodedCourseId) {
                 renderError("无法加载分类数据，请稍后重试。");
             }
         }
-        if (data.gradingScale) {
-            localStorage.setItem("currentGradingScale", data.gradingScale);
-            console.log("当前分数制:", data.gradingScale);
-        } else {
-            console.error("未检测到分数制，使用默认值 100");
-            localStorage.setItem("currentGradingScale", "100"); // 默认分数制
-        }
-        
+
+        // 此处只打印缓存中的分数制，避免重复定义
+        console.log(
+            "当前分数制 (缓存):",
+            localStorage.getItem("currentGradingScale") || 100
+        );
     } catch (error) {
         console.error("加载分类数据时出现错误:", error);
         renderError("无法加载分类数据，请稍后重试。");
@@ -349,6 +344,12 @@ function handleAssignmentClick(assignmentId) {
             if (response.success && Array.isArray(response.data?.submissions)) {
                 cachedCategorizedData.submissions = response.data.submissions;
 
+                // 获取并存储分数制
+                const gradingScale = Number(response.data.gradingScale) || 100; // 确保 gradingScale 是数值型
+                localStorage.setItem("currentGradingScale", gradingScale); // 缓存分数制
+                console.log("[handleAssignmentClick] 当前分数制:", gradingScale);
+
+                // 渲染学生提交页面
                 navigateTo("submissions", renderStudentSubmissions, response.data.submissions);
             } else {
                 console.error("获取学生提交数据失败:", response.error);
@@ -360,19 +361,14 @@ function handleAssignmentClick(assignmentId) {
 
 
 // --------------------- 返回按钮逻辑 ---------------------
-document.getElementById("return-button").addEventListener("click", () => {
-    clearLocalStorage(); // 返回时清理 localStorage
-    navigateTo("assignments", renderAssignmentsDetails, cachedCategorizedData.assignments);
-});
-
-// --------------------- 渲染页面：学生提交详情 ---------------------
-// popup.js - renderStudentSubmissions 修改
-function renderStudentSubmissions(submissions) {
+function renderStudentSubmissions(submissions, gradingScale) {
     if (!Array.isArray(submissions)) {
-        console.error("submissions 数据格式错误，当前值:", submissions);
+        console.error("submissions 数据格式错误:", submissions);
         renderError("学生提交数据加载失败，请稍后重试。");
         return;
     }
+
+    gradingScale = Number(gradingScale) || 100; // 确保 gradingScale 为数值类型
 
     const container = document.getElementById('assignments-container');
     container.innerHTML = `
@@ -409,15 +405,22 @@ function renderStudentSubmissions(submissions) {
             .map(file => `<a href="${file.fileLink}" target="_blank">${file.fileName}</a>`)
             .join(', ') || '无';
 
+            const gradingScale = Number(localStorage.getItem("currentGradingScale")) || 100; // 确保是数值型
+            const displayScore = gradingScale === 5
+                ? `${submission.score} / 5`
+                : `${submission.score} / 100`;
+            
+
         const row = `
             <tr>
                 <td>${submission.studentName || '未知名字'}</td>
                 <td>${photoLinks}</td>
                 <td>${videoLinks}</td>
                 <td>${codeLinks}</td>
-                <td class="score" data-student-id="${submission.studentId}">待评分</td>
+                <td class="score" data-student-id="${submission.studentId}">${displayScore}</td>
             </tr>
         `;
+
         tableBody.insertAdjacentHTML('beforeend', row);
     });
 }
@@ -443,8 +446,6 @@ document.getElementById("auto-grade-button").addEventListener("click", () => {
     }
 
     const config = getGradingConfig();
-    console.log("当前评分配置：", config);
-
     if (!config.requirePhoto && !config.requireVideo && !config.requireCode) {
         alert("请至少选择一个评分配置！");
         return;
@@ -456,63 +457,80 @@ document.getElementById("auto-grade-button").addEventListener("click", () => {
         return;
     }
 
-    // 获取分数制
-    const gradingScale = localStorage.getItem("currentGradingScale") || "100";
+    const gradingScale = Number(localStorage.getItem("currentGradingScale")) || 100; // 确保数值型
+    console.log("[popup.js] 当前传递的分数制:", gradingScale);
 
     chrome.runtime.sendMessage(
         {
             action: "startGrading",
-            assignmentId: assignmentId,
-            submissions: submissions,
-            // 标记为异步处理
-
-            config: config,
-            gradingScale: gradingScale, // 传递分数制
+            assignmentId,
+            submissions,
+            gradingScale,
+            config,
         },
         (response) => {
             if (response && response.success) {
-                const updatedSubmissions = response.submissions;
-                cachedCategorizedData.submissions = updatedSubmissions;
-
-                updatedSubmissions.forEach((submission) => {
-                    const scoreElement = document.querySelector(`.score[data-student-id="${submission.studentId}"]`);
-                    if (scoreElement) {
-                        scoreElement.textContent = submission.score;
-                    }
-                });
-                alert("评分完成！分数已更新。");
+                console.log("[popup.js] 评分成功:", response.submissions);
+                processGrading(response.submissions, gradingScale);
             } else {
-                console.error("评分失败：", response?.error);
-                alert("评分失败，请稍后重试！");
+                console.error("[popup.js] 评分失败:", response?.error);
+                alert("评分失败，请检查后台日志！");
             }
         }
     );
 });
 
+
 // 实时更新分数到页面
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === "updateScores") {
         const updatedSubmissions = message.submissions || [];
+        const gradingScale = Number(message.gradingScale) || 100; // 确保是数值型
         updatedSubmissions.forEach((submission) => {
             const scoreElement = document.querySelector(`.score[data-student-id="${submission.studentId}"]`);
             if (scoreElement) {
-                scoreElement.textContent = submission.score; // 更新分数
+                const displayScore = gradingScale === 5
+                    ? `${submission.score} / 5`
+                    : `${submission.score} / 100`;
+                scoreElement.textContent = displayScore;
             }
         });
-        sendResponse({ success: true }); // 通知成功
+        sendResponse({ success: true });
     }
 });
 
 
+
 // 提取评分配置
 function getGradingConfig() {
-    return {
-        requirePhoto: document.getElementById("require-photo").checked, // 是否需要照片
-        requireVideo: document.getElementById("require-video").checked, // 是否需要视频
-        requireCode: document.getElementById("require-code").checked,  // 是否需要代码
+    const config = {
+        requirePhoto: document.getElementById("require-photo").checked,
+        requireVideo: document.getElementById("require-video").checked,
+        requireCode: document.getElementById("require-code").checked,
     };
+
+    console.log("[getGradingConfig] 当前评分配置:", config);
+    return config;
 }
 
+// 处理评分结果
+// 在 processGrading 函数中同步评分结果到 cachedCategorizedData
+function processGrading(submissions, gradingScale) {
+    console.log("[processGrading] 使用分数制:", gradingScale);
+
+    submissions.forEach((submission) => {
+        const scoreElement = document.querySelector(`.score[data-student-id="${submission.studentId}"]`);
+        if (scoreElement) {
+            const displayScore = gradingScale === 5 ? `${submission.score} / 5` : `${submission.score} / 100`;
+            scoreElement.textContent = displayScore;
+        }
+    });
+
+    // 同步更新 cachedCategorizedData.submissions
+    cachedCategorizedData.submissions = submissions;
+
+    alert("评分已完成，页面已更新！");
+}
 
 // 点击“发送分数”按钮
 document.getElementById("submit-grades-button").addEventListener("click", () => {
@@ -523,15 +541,15 @@ document.getElementById("submit-grades-button").addEventListener("click", () => 
     }
 
     const gradedSubmissions = submissions.map(submission => ({
-       
         studentName: submission.studentName || "未知学生",
         score: submission.score || 0, // 使用评分后的分数
-        files: submission.files,
+        files: submission.files,     // 确保文件也被包含
     }));
 
     // 发送到 Background
     sendGradingConfig("submitGrades", gradedSubmissions);
 });
+
 
 // 调整 sendGradingConfig 方法以支持发送分数
 async function sendGradingConfig(action, gradedSubmissions) {
@@ -593,5 +611,6 @@ function renderError(message) {
         container.innerHTML = `<p style="color: red;">${message}</p>`;
     }
 }
+
 
 
